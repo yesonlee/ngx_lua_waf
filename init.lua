@@ -14,6 +14,7 @@ PathInfoFix = optionIsOn(PathInfoFix)
 attacklog = optionIsOn(attacklog)
 CCDeny = optionIsOn(CCDeny)
 Redirect=optionIsOn(Redirect)
+Scan404Check = optionIsOn(Scan404)
 function getClientIp()
         IP  = ngx.var.remote_addr 
         if IP == nil then
@@ -240,6 +241,71 @@ function blockip()
                  return true
              end
          end
-     end
          return false
+     end
+     return false
+end
+
+-- 404扫描检测函数
+function scan_404()
+    if Scan404Check then
+        -- 只处理404状态码的请求
+        if ngx.var.status ~= "404" then
+            return false
+        end
+        
+        local client_ip = getClientIp()
+        local scan_key = "scan404_" .. client_ip
+        local scan_dict = ngx.shared.scan404 or {}
+        local block_dict = ngx.shared.blockip or {}
+        
+        -- 获取当前时间戳
+        local current_time = ngx.now()
+        
+        -- 获取或初始化扫描记录
+        local scan_data = scan_dict.get and scan_dict:get(scan_key)
+        local scan_info = {}
+        
+        if scan_data then
+            scan_info = ngx.decode_base64(scan_data)
+        else
+            scan_info = {
+                count = 0,
+                first_request_time = current_time,
+                last_request_time = current_time
+            }
+        end
+        
+        -- 更新扫描信息
+        scan_info.count = scan_info.count + 1
+        scan_info.last_request_time = current_time
+        
+        -- 检查是否超过时间窗口
+        if current_time - scan_info.first_request_time > Scan404Window then
+            -- 重置计数器
+            scan_info.count = 1
+            scan_info.first_request_time = current_time
+        end
+        
+        -- 检查是否超过阈值
+        if scan_info.count >= Scan404MaxCount then
+            -- 封禁IP
+            local block_key = "block_" .. client_ip
+            if block_dict.set then
+                block_dict:set(block_key, true, Scan404BlockDuration)
+            end
+            
+            log('SCAN404', ngx.var.request_uri, "-", "恶意404扫描检测，IP: " .. client_ip .. " 请求次数: " .. scan_info.count)
+            
+            -- 重置扫描记录
+            scan_info.count = 0
+            scan_info.first_request_time = current_time
+        end
+        
+        -- 保存更新后的扫描信息
+        if scan_dict.set then
+            scan_dict:set(scan_key, ngx.encode_base64(scan_info), Scan404Window * 2)
+        end
+    end
+    return false
 end

@@ -11,6 +11,11 @@ ipWhitelist={"127.0.0.1"}
 ipBlocklist={"1.0.0.1"}
 CCDeny="off"
 CCrate="100/60"
+-- 检测并限制恶意404扫描行为
+Scan404="on"
+Scan404Window=180     -- 统计窗口大小（秒）
+Scan404MaxCount=6     -- 窗口内404请求次数阈值（增加阈值以减少误判）
+Scan404BlockDuration=3600   -- 触发阈值后封禁时长（秒）
 html=[[
 <html xmlns="http://www.w3.org/1999/xhtml"><head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
